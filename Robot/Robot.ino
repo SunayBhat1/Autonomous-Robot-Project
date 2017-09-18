@@ -39,7 +39,7 @@ SOFTWARE.
 
 #include <Servo.h>
 
-//Initialize servo object, set pin
+//Initialize servo object, set pin (See Servo example for functionality details)
 Servo myservo;
 int pos = 90;
 int inc = 1;
@@ -61,13 +61,14 @@ long dist;
 int turn = 0;
 
 void setup(){
+  //Init serial for debugging
   Serial.begin(115200);
-  Serial.println("Hellow!");
+  Serial.println("Hello!");
   
   myservo.attach(servoPin);
   myservo.write(pos); 
   
-  //Set motor control/ultrasonic pins as inputs/outputs
+  //Set motor control/ultrasonic pins as inputs/outputs. See L298 Tutorial.pdf for pin map.
   pinMode(motorR1, OUTPUT);
   pinMode(motorR2, OUTPUT);
   pinMode(motorL1, OUTPUT);
@@ -75,47 +76,61 @@ void setup(){
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
 
+  //Init ultrasonic pin for readings
   digitalWrite(trigPin, LOW);
   delay(5000);
-  
+
+  //Move robot forward, function call
   Forward();
 }
 
 
 void loop(){
+  //reset loop count var
   int count = 0;
-  
+
+  //Increment servo sweep scan while moving
   pos = pos + inc;
   myservo.write(pos);
 
+  //Get ultrasonic reading
   dist = Ultra();
+
+  //Object avoidance loop is object detected within 20cm. Stay in loop till avoided
   while (dist <= 20){
+    
+    //Stop robot
     Stop();
     Serial.println(dist);
-    dist = Ultra();
+    dist = Ultra(); //Obtain distance again confirm. Failsafe against faulty readings. 
     count++;
+
+    //Once 30 bad readings detected consecutively, assume object detection.
     if (count == 30){
       Serial.println("Object Detected!");
       Stop();
       delay(500);
-      Back(200);
-      turn = Avoid();
-      if (turn == 1) TurnR(200);
+      Back(200); //Reverse
+      turn = Avoid(); //Call object avoid function, returns direction to turn/go.
+      if (turn == 1) TurnR(200); 
       else if (turn == 2) TurnL(200);
-      else if (turn == 3) TurnR(500);
+      else if (turn == 3) TurnR(500); //180 degree turn
       delay(1000);   
-      Forward();  
+      Forward();  //Continue moving
     }
     
-    Forward();
+    Forward();  //Continue moving
   }
 
   delay(50);
-  
+
+  //Increment servo
   if (pos == 115) inc = -5;
   else if (pos == 65) inc = 5;
 }
 
+//Function below for moving and turning. Might need to modify based on individual experimentation.
+//Note: Will behave differently as battery depletes. 
 void Back(int x){
   analogWrite(motorR1, 0);
   analogWrite(motorR2, 50);
@@ -157,6 +172,7 @@ void Stop(){
   analogWrite(motorL2, 0);
 }
 
+//Ultrasonic reading acquisition. See HC-SR04 documentation for details. 
 long Ultra(){
   long duration;
   digitalWrite(trigPin, LOW);
@@ -168,6 +184,11 @@ long Ultra(){
   return (duration*0.034/2);
 }
 
+/*Object avoidance function. Sweeps both left and right 90 degrees summing all readings under
+ * 100cm. Whichever side has lower sum, turn in that direction. If both sums are too high
+ * (greater than 4000), then turn around. Otherwise continue straight (will presumabely trigger 
+ * loop again if worng decision). 
+ */
 int Avoid(){
   long plus;
   long sumL = 0;
